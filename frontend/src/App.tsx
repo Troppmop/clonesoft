@@ -1,43 +1,59 @@
-import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router'
+import CalendarApp from './apps/calendar/CalendarApp'
+import Bookmarks from './apps/learning/Bookmarks'
+import LearningDashboard from './apps/learning/Dashboard'
+import Library from './apps/learning/Library'
+import PlanPage from './apps/learning/PlanPage'
+import PortionReader from './apps/learning/PortionReader'
+import SectionReader from './apps/learning/SectionReader'
+import NoteEditor from './apps/notes/NoteEditor'
+import NotesApp, { NoNoteSelected } from './apps/notes/NotesApp'
+import TodosApp from './apps/todos/TodosApp'
+import Layout from './components/Layout'
+import { Spinner } from './components/ui'
+import { useMe } from './lib/queries'
+import AuthPage from './pages/AuthPage'
+import Home from './pages/Home'
 
-type Health = { status: string; database: string }
-
-function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json() as Promise<Health>
-      })
-      .then(setHealth)
-      .catch((err: Error) => setError(err.message))
-  }, [])
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 shadow-lg">
-        <h1 className="mb-4 text-2xl font-bold">Clonesoft</h1>
-        {error && <p className="text-red-400">Backend unreachable: {error}</p>}
-        {!error && !health && <p className="text-slate-400">Checking backend…</p>}
-        {health && (
-          <ul className="space-y-1">
-            <li>
-              API: <span className="text-emerald-400">{health.status}</span>
-            </li>
-            <li>
-              Database:{' '}
-              <span className={health.database === 'ok' ? 'text-emerald-400' : 'text-red-400'}>
-                {health.database}
-              </span>
-            </li>
-          </ul>
-        )}
-      </div>
-    </main>
-  )
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { data: user, isLoading } = useMe()
+  const location = useLocation()
+  if (isLoading) return <Spinner className="m-auto mt-24" />
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  return children
 }
 
-export default App
+function GuestOnly({ children }: { children: ReactNode }) {
+  const { data: user, isLoading } = useMe()
+  if (isLoading) return <Spinner className="m-auto mt-24" />
+  if (user) return <Navigate to="/" replace />
+  return children
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<GuestOnly><AuthPage mode="login" /></GuestOnly>} />
+      <Route path="/register" element={<GuestOnly><AuthPage mode="register" /></GuestOnly>} />
+      <Route element={<RequireAuth><Layout /></RequireAuth>}>
+        <Route index element={<Home />} />
+        <Route path="apps/notes" element={<NotesApp />}>
+          <Route index element={<NoNoteSelected />} />
+          <Route path=":noteId" element={<NoteEditor />} />
+        </Route>
+        <Route path="apps/todos" element={<TodosApp />} />
+        <Route path="apps/calendar" element={<CalendarApp />} />
+        <Route path="apps/learning">
+          <Route index element={<LearningDashboard />} />
+          <Route path="library" element={<Library />} />
+          <Route path="bookmarks" element={<Bookmarks />} />
+          <Route path="plans/:planId" element={<PlanPage />} />
+          <Route path="plans/:planId/day/:day" element={<PortionReader />} />
+          <Route path="read/:book/:section" element={<SectionReader />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

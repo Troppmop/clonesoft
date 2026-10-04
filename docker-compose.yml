@@ -1,6 +1,8 @@
+# Local development stack: `docker compose up --build`, then open http://localhost:5173
+# Backend (air) and frontend (Vite) both hot-reload from the bind-mounted source.
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -9,37 +11,53 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  backend:
-    build: ./backend
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
-    # Dev server with auto-reload; the Dockerfile's default CMD is the production server
-    command: fastapi dev main.py --host 0.0.0.0 --port 8000
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      CORS_ORIGINS: '["http://localhost:5173"]'
-      # Needed for reload to detect changes on Windows/macOS bind mounts
-      WATCHFILES_FORCE_POLLING: "true"
     ports:
-      - "8000:8000"
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    environment:
+      APP_ENV: development
+      PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "8080:8080"
     volumes:
       - ./backend:/app
-      - /app/.venv
+      - go-build-cache:/root/.cache/go-build
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
     environment:
-      VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_API_PROXY_TARGET: http://backend:8080
       VITE_USE_POLLING: "true"
     ports:
       - "5173:5173"
@@ -51,4 +69,5 @@ services:
       - backend
 
 volumes:
-  postgres_data:
+  pgdata:
+  go-build-cache:

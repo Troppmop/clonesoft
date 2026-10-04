@@ -1,1 +1,19 @@
 @import "tailwindcss";
+@import "@fontsource-variable/noto-serif-hebrew";
+
+@theme {
+  /* Noto Serif Hebrew renders vowels and cantillation marks; the rest are fallbacks */
+  --font-hebrew: "Noto Serif Hebrew Variable", "Taamey Frank CLM", "SBL Hebrew", "Times New Roman", serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}

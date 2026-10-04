@@ -1,0 +1,21 @@
+# Hot reload for local development (used by Dockerfile.dev)
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/server ./cmd/server"
+  bin = "./tmp/server"
+  include_ext = ["go", "sql"]
+  exclude_dir = ["tmp"]
+  # Polling is needed because file events don't cross Windows/macOS bind mounts into Docker
+  poll = true
+  poll_interval = 500
+  delay = 200
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true
